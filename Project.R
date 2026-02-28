@@ -11,7 +11,7 @@ library(e1071)
 library(ISLR2)
 library(keras3)
 library(tensorflow)
-#############################################################################
+###############################################################################
 # 1. Load with factors
 bank <- read.csv("bank_marketing.csv", sep = ";", stringsAsFactors = FALSE)
 summary(bank)
