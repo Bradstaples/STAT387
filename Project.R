@@ -19,9 +19,6 @@ summary(bank)
 bank$y <- ifelse(bank$y == "yes", 1, 0)
 #############################################################################
 #exploratory data analysis
-bankModel1<-glm(y~1, data=bank, family="binomial")
-bankModel2<-glm(y~., data=bank, family="binomial")
-bankModel2
 table(bank$y)
 prop.table(table(bank$y))
 #plot(bank)
@@ -516,7 +513,9 @@ ggplot(summary_results, aes(x = reorder(Method, ErrorRate), y = ErrorRate, fill 
   guides(fill = "none")
 ##############################################################################################
 #Stepwise Model selection stuff
-
+bankModel1<-glm(y~1, data=bank, family="binomial")
+bankModel2<-glm(y~., data=bank, family="binomial")
+bankModel2
 summary(bankModel2)
 
 vif(bankModel2)
