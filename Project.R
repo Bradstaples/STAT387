@@ -139,7 +139,7 @@ yTest  <- bank$y[-train]
 knnTrainError <- numeric(20)
 knnTestError <- numeric(20)
 
-#loop for the KNN errors for 100 iterations
+#loop for the KNN errors for 20 iterations
 for(i in 1:20){
   knnTrain <- knn(xTrain, xTrain, yTrain, k = i)
   knnTrainError[i]<- mean(knnTrain != yTrain)
@@ -148,11 +148,12 @@ for(i in 1:20){
   knnTest <- knn(xTrain, xTest, yTrain, k = i)
   knnTestError[i]<- mean(knnTest != yTest)
 }
+#plotting the training and test error rates for KNN
 size=range(c(knnTrainError, knnTestError))
 plot(1:20, knnTrainError, type="l", col="red", ylim=size, xlab="K", ylab="Error Rate")
 lines(1:20, knnTestError, type="l", col="black")
 legend("topright", legend=c("Train", "Test"), col=c("red", "black"), lty=1)
-
+#determining the optimal k value based on the minimum training error
 optimalK <- which.min(knnTrainError)
 optimalK
 
@@ -167,7 +168,7 @@ trainingMSE
 testMSE
 summary(knnPredTest)
 #confusion matrix and error rate for KNN with K=1
-knnConfusionMatrix<-table(Predicted = knnPredTrain, Actual = yTrain)
+knnConfusionMatrix<-table(Predicted = knnPredTest, Actual = yTest)
 knnConfusionMatrix
 ####Confusion matrix gg plot
 knnCmData <- as.data.frame(table(Predicted = knnPredTest, Actual = yTest))
@@ -176,7 +177,7 @@ knnCmData <- as.data.frame(table(Predicted = knnPredTest, Actual = yTest))
 ggplot(knnCmData, aes(x = factor(Actual), y = factor(Predicted), fill = Freq)) +
   geom_tile(color = "white") +
   geom_text(aes(label = Freq), fontface = "bold", size = 6) +
-  scale_fill_gradient(low = "#f7f7f7", high = "#252525") +
+  scale_fill_gradient(low = "#e0f3f8", high = "#084594") +
   scale_x_discrete(limits = c("0", "1"), position = "top") + 
   scale_y_discrete(limits = c("1", "0")) + 
   labs(title = "Confusion Matrix: KNN (Test Set)",
@@ -219,7 +220,71 @@ image(px1, py1, gridMatrix, col = c("#FF000033", "#0000FF33"),
 # Add actual training points
 points(bank$duration[train], bank$age[train], 
        col = ifelse(yTrain == "yes", "blue", "red"), pch = 20, cex = 0.5)
+############################################################################
+#knn with k=20
+#optimal k is 1, KNN values and confusion matrix for k=1
+knnPredTrain2 <- knn(train = xTrain, test = xTrain, cl = yTrain, k = 20)
+trainingMSE2  <- mean(knnPredTrain2 != yTrain)
 
+knnPredTest2 <- knn(train = xTrain, test = xTest, cl = yTrain, k = 20)
+testMSE2     <- mean(knnPredTest2 != yTest)
+
+trainingMSE2
+testMSE2
+summary(knnPredTest2)
+#confusion matrix and error rate for KNN with K=1
+knnConfusionMatrix<-table(Predicted = knnPredTest2, Actual = yTest)
+knnConfusionMatrix
+####Confusion matrix gg plot
+knnCmData2 <- as.data.frame(table(Predicted = knnPredTest2, Actual = yTest))
+
+# 2. Plot using ggplot with the specific coordinate overrides
+ggplot(knnCmData2, aes(x = factor(Actual), y = factor(Predicted), fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), fontface = "bold", size = 6) +
+  scale_fill_gradient(low = "#e0f3f8", high = "#084594") +
+  scale_x_discrete(limits = c("0", "1"), position = "top") + 
+  scale_y_discrete(limits = c("1", "0")) + 
+  labs(title = "Confusion Matrix: KNN (Test Set)",
+       subtitle = paste("Test Error Rate:", round(testMSE2, 4)),
+       x = "Actual",
+       y = "Predicted") +
+  theme_minimal() +
+  theme(panel.grid = element_blank())
+#######
+#The training confusion matrix shows perfect classification (no false positives or false negatives), 
+#which is characteristic of overfitting when K = 1. 
+#However, the test confusion matrix reveals misclassifications, 
+#demonstrating that the model does not generalize perfectly to unseen data.
+
+#decision boundary plots
+plot_cols <- c("duration", "age")
+xTrain_2d <- scale(bank[train, plot_cols])
+# Scale parameters from training to use for the grid
+train_mean <- attr(xTrain_2d, "scaled:center")
+train_sd   <- attr(xTrain_2d, "scaled:scale")
+
+# Create the grid (Reduced length.out slightly so it runs faster)
+px1 <- seq(min(bank$duration), max(bank$duration), length.out=200)
+py1 <- seq(min(bank$age), max(bank$age), length.out=200)
+grid <- expand.grid(duration = px1, age = py1)
+
+# Scale the grid using training data parameters
+gridScaled <- scale(grid, center = train_mean, scale = train_sd)
+
+# Predict on the grid using the 2D model
+gridPred <- knn(train = xTrain_2d, test = gridScaled, cl = yTrain, k = 20)
+
+# Reshape predictions into a matrix for the plot
+gridMatrix <- matrix(as.numeric(gridPred), nrow=length(px1), ncol=length(py1))
+
+# Generate the plot
+image(px1, py1, gridMatrix, col = c("#FF000033", "#0000FF33"), 
+      xlab = "Duration", ylab = "Age", 
+      main = paste("KNN Decision Boundary (K =", 20, ")"))
+# Add actual training points
+points(bank$duration[train], bank$age[train], 
+       col = ifelse(yTrain == "yes", "blue", "red"), pch = 20, cex = 0.5)
 #############################################################################
 #############################################################################
 #Now report test MSE using Random Forest with B = 500, and B = 1000. Compare your findings.
@@ -320,11 +385,14 @@ rocObj <- roc(yTest, boostPred)
 plot(rocObj, col = "blue", main = paste("ROC Curve for Boosting (AUC =", round(auc(rocObj), 3), ")"))
 abline(a = 0, b = 1, lty = 2, col = "red") # Random chance line
 #############################################################################
+
+########################SVM Approach########################################
+
 #############################################################################
 #Repeat (c) with an SVM approach based on a radial basis function (choose any 𝛾) and a dth degree
 #polynomial kernel (use d = 2 and d = 3). 
 #radial basis function
-svmRadial <- svm(as.factor(y)~ ., data = bank[train, ], kernel = "radial", gamma = 0.1)
+svmRadial <- svm(as.factor(y)~ ., data = bank[train, ], kernel = "radial", gamma = 0.098)
 svmRadialPred <- predict(svmRadial, newdata = bank[-train, ])
 svmRadialError <- mean(svmRadialPred != yTest)
 svmRadialError
@@ -344,6 +412,7 @@ svmPoly3Error <- mean(svmPoly3Pred != yTest)
 svmPoly3Error
 table(Predicted = svmPoly3Pred, Actual = bank$y[-train])
 ###########################################################################################
+#Radial COnfusion Matrix
 svmCmData <- as.data.frame(table(Predicted = svmRadialPred, Actual = bank$y[-train]))
 
 ggplot(svmCmData, aes(x = factor(Actual), y = factor(Predicted), fill = Freq)) +
@@ -356,6 +425,39 @@ ggplot(svmCmData, aes(x = factor(Actual), y = factor(Predicted), fill = Freq)) +
   scale_y_discrete(limits = c("1", "0")) + 
   labs(title = "Confusion Matrix: SVM (Radial)",
        subtitle = paste("Test Error Rate:", round(svmRadialError, 4)),
+       x = "Actual",
+       y = "Predicted") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+##Polynomial d=2 Confusion Matrix
+svmPoly2CmData <- as.data.frame(table(Predicted = svmPoly2Pred, Actual = bank$y[-train]))
+ggplot(svmPoly2CmData, aes(x = factor(Actual), y = factor(Predicted), fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), fontface = "bold", size = 6) +
+  scale_fill_gradient(low = "#f7fbff", high = "#08306b") +
+  # Force Actual 0 -> 1 (Left to Right)
+  scale_x_discrete(limits = c("0", "1"), position = "top") + 
+  # Force Predicted 0 -> 1 (Top to Bottom)
+  scale_y_discrete(limits = c("1", "0")) + 
+  labs(title = "Confusion Matrix: SVM (Polynomial d=2)",
+       subtitle = paste("Test Error Rate:", round(svmPoly2Error, 4)),
+       x = "Actual",
+       y = "Predicted") +
+  theme_minimal() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+#Polynomial d=3 Confusion Matrix
+svmPoly3CmData <- as.data.frame(table(Predicted = svmPoly3Pred, Actual = bank$y[-train]))
+ggplot(svmPoly3CmData, aes(x = factor(Actual), y = factor(Predicted), fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), fontface = "bold", size = 6) +
+  scale_fill_gradient(low = "#f7fbff", high = "#08306b") +
+  # Force Actual 0 -> 1 (Left to Right)
+  scale_x_discrete(limits = c("0", "1"), position = "top") + 
+  # Force Predicted 0 -> 1 (Top to Bottom)
+  scale_y_discrete(limits = c("1", "0")) + 
+  labs(title = "Confusion Matrix: SVM (Polynomial d=3)",
+       subtitle = paste("Test Error Rate:", round(svmPoly3Error, 4)),
        x = "Actual",
        y = "Predicted") +
   theme_minimal() +
@@ -374,20 +476,24 @@ ggplot(svmResults, aes(x = kernelType, y = testMse, fill = kernelType)) +
        y = "Test MSE") +
   theme_minimal() +
   guides(fill = "none")
-# Plotting the decision boundary for the Radial SVM
+# Plotting the decision boundary for the Radial SVM, duration vs age
 plot(svmRadial, bank[train, ], duration ~ age, 
-     main = "SVM Radial Kernel: Decision Boundary (Duration vs Age)",
-     color.palette = terrain.colors)
+     color.palette = terrain.colors,
+     svSymbol = 16,
+     dataSymbol = NA)
 
-# Polynomial2 Decision Boundary
+# Polynomial2 Decision Boundary, duration vs age
 plot(svmPoly2, bank[train, ], duration ~ age, 
-     main = "SVM Poly (d=2) Kernel: Decision Boundary",
-     color.palette = topo.colors)
+     color.palette = topo.colors,
+     svSymbol = 16,
+     dataSymbol = NA)
 
-# Polynomial3 Decision Boundary
+# Polynomial3 Decision Boundary, duration vs age
 plot(svmPoly3, bank[train, ], duration ~ age, 
-     main = "SVM Poly (d=3) Kernel: Decision Boundary",
-     color.palette = topo.colors)
+     color.palette = topo.colors,
+     svSymbol = 16,
+     dataSymbol = NA)
+
 #############################################################################
 # ROC graph, first we retrain the Radial model with probability = TRUE
 radialModel <- svm(as.factor(y) ~ ., data = bank[train, ], 
@@ -452,7 +558,7 @@ model|>compile(loss= "binary_crossentropy",
                metrics = list("accuracy"))
 
 history <- model|>fit(xTrain, yTrain,
-                      epochs = 50,
+                      epochs = 20,
                       batch_size = 32,
                       validation_data = list(xTest, yTest))
 
