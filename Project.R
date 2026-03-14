@@ -21,8 +21,15 @@ bank$y <- ifelse(bank$y == "yes", 1, 0)
 #exploratory data analysis
 table(bank$y)
 prop.table(table(bank$y))
-#plot(bank)
-#pairs(bank)
+
+#plot comparing yes and no class imbalance
+ggplot(bank, aes(x = factor(y), fill = factor(y))) +
+  geom_bar() +
+  labs(title = "Distribution of Response Variable (y)",
+       x = "Response (y)",
+       y = "Count",
+       fill = "Response (y)") +
+  theme_minimal()
 #############################################################################
 # Calculate means of numeric variables grouped by the response y
 groupMeans <- aggregate(cbind(age, balance, duration, campaign) ~ y, 
@@ -105,15 +112,15 @@ ggplot(bank, aes(x=factor(y), y=duration)) +
        y="Duration") +
   theme_minimal()
 #############################################################################
+
 #############################################################################
-###########################################################
 #create a training set from the data
 set.seed(123)
 train<-sample(1:nrow(bank), size=0.8*nrow(bank))
 x<-model.matrix(y~., data=bank)[, -1]
+
 #############################################################################
-#Fit a KNN with K chosen optimally using training error rate. Report both the training and test MSE
-#rates for the optimal K.
+#KNN
 xTrain <- scale(x[train, ])
 trainMean <- attr(xTrain, "scaled:center")
 trainSD   <- attr(xTrain, "scaled:scale")
@@ -153,9 +160,11 @@ testMSE     <- mean(knnPredTest != yTest)
 trainingMSE
 testMSE
 summary(knnPredTest)
-#confusion matrix and error rate for KNN with K=1
+
+#confusion matrix and error rate for KNN with K=13
 knnConfusionMatrix<-table(Predicted = knnPredTest, Actual = yTest)
 knnConfusionMatrix
+
 ####Confusion matrix gg plot
 knnCmData <- as.data.frame(table(Predicted = knnPredTest, Actual = yTest))
 
@@ -172,7 +181,7 @@ ggplot(knnCmData, aes(x = factor(Actual), y = factor(Predicted), fill = Freq)) +
        y = "Predicted") +
   theme_minimal() +
   theme(panel.grid = element_blank())
-#######
+
 #sensitivity and specificity for KNN with K=13
 knnSensitivity <- knnConfusionMatrix[2, 2] / sum(knnConfusionMatrix[, 2])
 knnSpecificity <- knnConfusionMatrix[1, 1] / sum(knnConfusionMatrix[, 1])
@@ -182,6 +191,7 @@ cat("KNN Specificity:", round(knnSpecificity, 4), "\n")
 #decision boundary plots
 plot_cols <- c("duration", "age")
 xTrain_2d <- scale(bank[train, plot_cols])
+
 # Scale parameters from training to use for the grid
 train_mean <- attr(xTrain_2d, "scaled:center")
 train_sd   <- attr(xTrain_2d, "scaled:scale")
@@ -191,13 +201,13 @@ px1 <- seq(min(bank$duration), max(bank$duration), length.out=200)
 py1 <- seq(min(bank$age), max(bank$age), length.out=200)
 grid <- expand.grid(duration = px1, age = py1)
 
-# Scale the grid using training data parameters
+# Scale the grid 
 gridScaled <- scale(grid, center = train_mean, scale = train_sd)
 
-# Predict on the grid using the 2D model
+# Predict on the grid
 gridPred <- knn(train = xTrain_2d, test = gridScaled, cl = yTrain, k = optimalK)
 
-# Reshape predictions into a matrix for the plot
+# Reshape predictions into a matrix 
 gridMatrix <- matrix(as.numeric(gridPred), nrow=length(px1), ncol=length(py1))
 
 # Generate the plot
@@ -209,7 +219,7 @@ points(bank$duration[train], bank$age[train],
        col = ifelse(yTrain == "yes", "blue", "red"), pch = 20, cex = 0.5)
 
 #############################################################################
-#Now report test MSE using Random Forest with B = 500, and B = 1000. Compare your findings.
+#Random Forest Models
 rf500 <- randomForest(xTrain, as.factor(yTrain), ntree=500)
 rf1000 <- randomForest(xTrain, as.factor(yTrain), ntree=1000)
 
@@ -221,12 +231,14 @@ rf1000MSE <- mean(rf1000Pred != as.factor(yTest))
 
 rf500MSE
 rf1000MSE
+
 #confusion matricies
 table(Predicted = rf500Pred, Actual = bank$y[-train])
 table(Predicted = rf1000Pred, Actual = bank$y[-train])
 
 # Calculate variable importance
 varImpData <- as.data.frame(importance(rf1000))
+
 varImpData$variableName <- rownames(varImpData)
 #consolidate grouping of month, day, and duration into one variable for the plot
 factor_prefixes <- c("month", "job", "education", 
@@ -254,8 +266,6 @@ ggplot(aggVarImp, aes(x = reorder(groupedName, MeanDecreaseGini), y = MeanDecrea
        y = "Mean Decrease in Gini") +
   theme_minimal()
 
-
-###################
 #Confusion matrix
 rf1000CmData <- as.data.frame(table(Predicted = rf1000Pred, Actual = bank$y[-train]))
 
@@ -279,10 +289,9 @@ rf1000Specificity <- rf1000ConfMat[1, 1] / sum(rf1000ConfMat[, 1])
 cat("Random Forest (B=1000) Sensitivity:", round(rf1000Sensitivity, 4), "\n")
 cat("Random Forest (B=1000) Specificity:", round(rf1000Specificity, 4), "\n")
 
+
 #############################################################################
-#############################################################################
-#repeat random forest with a Boosting approach with B = 1000, d = 1, and λ = 0.01
-# Convert all character columns to factors for gbm
+#Boosting Models
 bank[sapply(bank, is.character)] <- lapply(bank[sapply(bank, is.character)], as.factor)
 boostModel <- gbm(y~., data = bank[train, ], distribution = "bernoulli", n.trees = 1000)
 boostPred <- predict(boostModel, bank[-train,], type = "response")
@@ -291,10 +300,11 @@ boostMSE
 boostProbs <- ifelse(boostPred > 0.5, 1, 0)
 table(Predicted = boostProbs, Actual = bank$y[-train])
 gbm.perf(boostModel, method = "OOB")
-# Capture the influence data without auto-plotting
+
+# find influential predictors in model
 boostImportance <- summary(boostModel, plotit = FALSE)
 
-# Plot using ggplot for a professional look
+# Plot predictor relative influence
 ggplot(boostImportance, aes(x = reorder(var, rel.inf), y = rel.inf)) +
   geom_bar(stat = "identity", fill = "#084594") +
   coord_flip() +
@@ -303,7 +313,8 @@ ggplot(boostImportance, aes(x = reorder(var, rel.inf), y = rel.inf)) +
        x = "Bank Marketing Features",
        y = "Relative Influence (%)") +
   theme_minimal()
-# Convert table to a data frame for plotting
+
+# Convert table to a data frame for plotting heat map
 confMatDf <- as.data.frame(table(Predicted = boostProbs, Actual = bank$y[-train]))
 #confusion matrix heat map
 ggplot(confMatDf, aes(x = Actual, y = Predicted, fill = Freq)) +
@@ -323,10 +334,10 @@ boostSensitivity <- boostConfMat[2, 2] / sum(boostConfMat[, 2])
 boostSpecificity <- boostConfMat[1, 1] / sum(boostConfMat[, 1])
 cat("Boosting Sensitivity:", round(boostSensitivity, 4), "\n")
 cat("Boosting Specificity:", round(boostSpecificity, 4), "\n")
-# To get the test error for every tree
+# test error for every tree for prediction
 boostTestError <- predict(boostModel, bank[-train, ], n.trees = 1:1000, type = "response")
 
-# Calculate MSE for each stage
+# Calculate MSE for stage of boosting
 testMseStage <- apply(boostTestError, 2, function(pred) mean((pred > 0.5) != yTest))
 trainMseStage <- boostModel$train.error # gbm stores training error automatically
 
@@ -348,20 +359,16 @@ ggplot(plotData, aes(x = trees)) +
 
 library(pROC)
 
-# Generate the ROC curve for your Boosting
+# Generate the ROC curve for Boosting
 rocObj <- roc(yTest, boostPred)
 
 # Plot the ROC Curve
 plot(rocObj, col = "blue", main = paste("ROC Curve for Boosting (AUC =", round(auc(rocObj), 3), ")"))
 abline(a = 0, b = 1, lty = 2, col = "red") # Random chance line
 #############################################################################
+#SVM Models
 
-########################SVM Approach########################################
-
-#############################################################################
-#Repeat (c) with an SVM approach based on a radial basis function (choose any 𝛾) and a dth degree
-#polynomial kernel (use d = 2 and d = 3). 
-#radial basis function
+#SVM radial
 svmRadial <- svm(as.factor(y)~ ., data = bank[train, ], kernel = "radial", gamma = 0.098)
 svmRadialPred <- predict(svmRadial, newdata = bank[-train, ])
 svmRadialError <- mean(svmRadialPred != yTest)
@@ -447,8 +454,8 @@ svmPoly3Sensitivity <- svmPoly3ConfMat[2, 2] / sum(svmPoly3ConfMat[, 2])
 svmPoly3Specificity <- svmPoly3ConfMat[1, 1] / sum(svmPoly3ConfMat[, 1])
 cat("Polynomial d=3 Sensitivity:", round(svmPoly3Sensitivity, 4), "\n")
 cat("Polynomial d=3 Specificity:", round(svmPoly3Specificity, 4), "\n")
-###########################################################################################
-# Create a small data frame of your SVM results
+
+# Create a small data frame of your SVM results MSE tables
 svmResults <- data.frame(
   kernelType = c("Radial", "Poly d=2", "Poly d=3"),
   testMse = c(svmRadialError, svmPoly2Error, svmPoly3Error)
@@ -479,8 +486,7 @@ plot(svmPoly3, bank[train, ], duration ~ age,
      svSymbol = 16,
      dataSymbol = NA)
 
-#############################################################################
-# ROC graph, first we retrain the Radial model with probability = TRUE
+# ROC graph
 radialModel <- svm(as.factor(y) ~ ., data = bank[train, ], 
                    kernel = "radial", gamma = 0.098, probability = TRUE)
 poly2Model  <- svm(as.factor(y) ~ ., data = bank[train, ], 
@@ -513,10 +519,7 @@ legend("bottomright", legend = c(paste("Radial (AUC =", round(auc(radialRoc), 3)
        col = c("darkred", "darkblue", "darkgreen"), lwd = 3)
 abline(a = 0, b = 1, lty = 2, col = "gray")
 #############################################################################
-
-#########################           Neural net         ##################################
-
-################################################################################################
+#Neural Net Models
 
 training<-sample(1:nrow(bank), size=0.8*nrow(bank))
 
@@ -554,10 +557,10 @@ plot(history)
 # Create ROC object
 nnProbs <- model |> predict(xTestNN)
 
-# Convert to binary classes (0 or 1)
+# Convert responses to 0 or 1
 nnPreds <- ifelse(nnProbs > 0.5, 1, 0)
 
-# Calculate Test MSE (Error Rate)
+# Calculate Test MSE 
 nnTestMse <- mean(nnPreds != yTestNN)
 cat("Neural Network Test MSE:", nnTestMse)
 nnRoc <- roc(yTestNN, as.numeric(nnProbs))
@@ -572,7 +575,7 @@ nnProbs <- model |> predict(xTestNN)
 nnPreds <- ifelse(nnProbs > 0.5, 1, 0)
 table(Predicted = nnPreds, Actual = yTestNN)
 
-#COnfusion Matrix for Neural Net
+#Confusion Matrix for Neural Net
 nnCmData <- as.data.frame(table(Predicted = nnPreds, Actual = yTestNN))
 
 ggplot(nnCmData, aes(x = factor(Actual), y = factor(Predicted), fill = Freq)) +
@@ -588,15 +591,17 @@ ggplot(nnCmData, aes(x = factor(Actual), y = factor(Predicted), fill = Freq)) +
   theme_minimal() +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
-##sensitivity and specificity for neural net
+#sensitivity and specificity for neural net
 nnConfMat <- table(Predicted = nnPreds, Actual = yTestNN)
 nnSensitivity <- nnConfMat[2, 2] / sum(nnConfMat[, 2])
 nnSpecificity <- nnConfMat[1, 1] / sum(nnConfMat[, 1])
 cat("Neural Network Sensitivity:", round(nnSensitivity, 4), "\n")
 cat("Neural Network Specificity:", round(nnSpecificity, 4), "\n")
 
-################################################################################
-# Consolidate results into one table
+#############################################################################
+#conlusion Plots
+
+#consolidate results for comparison plot
 summary_results <- data.frame(
   Method = c("KNN", "Random Forest", "Boosting", "SVM (Radial)", "SVM(Poly2)", "SVM(Poly3)","Neural Net"),
   ErrorRate = c(testMSE, rf1000MSE, boostMSE, svmRadialError, svmPoly2Error, svmPoly3Error, nnTestMse)
@@ -631,44 +636,3 @@ ggplot(sensitivity_specificity, aes(x = Model)) +
   scale_fill_brewer(palette = "Set1") +
   guides(fill = "none") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-
-
-##############################################################################################
-#Stepwise Model selection stuff
-bankModel1<-glm(y~1, data=bank, family="binomial")
-bankModel2<-glm(y~., data=bank, family="binomial")
-bankModel2
-summary(bankModel2)
-
-vif(bankModel2)
-
-forwardAIC<-step(bankModel1, scope=list(lower=bankModel1, upper=bankModel2), 
-                 direction="forward", k=2)
-forwardAIC
-summary(forwardAIC)
-
-stepwiseAIC<-step(bankModel1, scope=list(lower=bankModel1, upper=bankModel2), 
-                  direction="both", k=2)
-stepwiseAIC
-summary(stepwiseAIC)
-
-backwardAIC<-step(bankModel2, scope=list(lower=bankModel2, upper=bankModel1), 
-                  direction="backward", k=2)
-backwardAIC
-summary(backwardAIC)
-
-AIC(forwardAIC)
-AIC(stepwiseAIC)
-AIC(backwardAIC)
-
-plot(forwardAIC$fitted.values, forwardAIC$residuals,
-     xlab = "Fitted Values",
-     ylab = "Residuals",
-     main = "Fitted vs. Residuals")
-abline(h = 0, col = "red", lwd=3)
-qqnorm(forwardAIC$residuals)
-qqline(forwardAIC$residuals, col="red", lwd=2)
-
-group1<-forwardAIC$fitted.values>median(forwardAIC$fitted.values)
-var.test(forwardAIC$residuals[group1], forwardAIC$residuals[!group1])
-
